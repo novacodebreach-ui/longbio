@@ -14,7 +14,8 @@ from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
 
-# Fix Vercel Import Paths
+# --- VERCEL FIX: Path for imports ---
+# This ensures index.py can see my_pb2.py and output_pb2.py in the same folder
 sys.path.append(os.path.dirname(__file__))
 
 try:
@@ -25,7 +26,8 @@ except ImportError as e:
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# --- FIX: LOGGING (Console Only for Vercel) ---
+# --- VERCEL FIX: Logging (StreamHandler Only) ---
+# Removed FileHandler("access.log") to prevent the Read-Only Filesystem error
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -34,7 +36,7 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
-# --- CONFIGURATION ---
+# --- CONSTANTS ---
 FREEFIRE_UPDATE_URL = "https://clientbp.ggblueshark.com/UpdateSocialBasicInfo"
 MAJOR_LOGIN_URL = "https://loginbp.ggblueshark.com/MajorLogin"
 OAUTH_URL = "https://100067.connect.garena.com/oauth/guest/token/grant"
@@ -42,7 +44,7 @@ FREEFIRE_VERSION = "OB52"
 KEY = bytes([89, 103, 38, 116, 99, 37, 68, 69, 117, 104, 54, 37, 90, 99, 94, 56])
 IV = bytes([54, 111, 121, 90, 68, 114, 50, 50, 69, 51, 121, 99, 104, 106, 77, 37])
 
-# --- DYNAMIC BIO PROTOBUF ---
+# --- DYNAMIC BIO PROTOBUF SETUP ---
 _sym_db = _symbol_database.Default()
 DESCRIPTOR_BIO = _descriptor_pool.Default().AddSerializedFile(
     b'\n\ndata.proto\"\xbb\x01\n\x04\x44\x61ta\x12\x0f\n\x07\x66ield_2\x18\x02 \x01(\x05\x12\x1e\n\x07\x66ield_5\x18\x05 \x01(\x0b\x32\r.EmptyMessage\x12\x1e\n\x07\x66ield_6\x18\x06 \x01(\x0b\x32\r.EmptyMessage\x12\x0f\n\x07\x66ield_8\x18\x08 \x01(\t\x12\x0f\n\x07\x66ield_9\x18\t \x01(\x05\x12\x1f\n\x08\x66ield_11\x18\x0b \x01(\x0b\x32\r.EmptyMessage\x12\x1f\n\x08\x66ield_12\x18\x0c \x01(\x0b\x32\r.EmptyMessage\"\x0e\n\x0c\x45mptyMessageb\x06proto3'
@@ -52,6 +54,7 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR_BIO, 'data1_pb2', globals())
 BioData = _sym_db.GetSymbol('Data')
 EmptyMessage = _sym_db.GetSymbol('EmptyMessage')
 
+# --- HELPERS ---
 def encrypt_data(data_bytes):
     cipher = AES.new(KEY, AES.MODE_CBC, IV)
     return cipher.encrypt(pad(data_bytes, AES.block_size))
@@ -86,7 +89,9 @@ def perform_major_login(access_token, open_id):
                 out = output_pb2.Garena_420()
                 out.ParseFromString(resp.content)
                 if out.token: return out.token
-        except: continue
+        except Exception as e:
+            logging.debug(f"Login attempt failed for platform {p_type}: {e}")
+            continue
     return None
 
 def perform_guest_login(uid, password):
@@ -114,7 +119,7 @@ HTML_UI = """
 <body class="flex flex-col items-center justify-center min-h-screen p-6">
     <div class="glass p-8 rounded-3xl w-full max-w-md shadow-2xl">
         <h1 class="text-3xl font-black gradient-text mb-6 text-center tracking-tighter">AETHER.OS</h1>
-        <form action="/bio_upload" method="GET" class="space-y-4">
+        <form id="bioForm" class="space-y-4">
             <input name="bio" placeholder="New Signature / Bio" class="w-full bg-black/50 border border-white/10 p-4 rounded-xl" required>
             <div class="grid grid-cols-2 gap-2">
                 <input name="uid" placeholder="UID" class="bg-black/50 border border-white/10 p-4 rounded-xl">
@@ -122,13 +127,33 @@ HTML_UI = """
             </div>
             <p class="text-center text-xs text-gray-500">OR</p>
             <input name="jwt" placeholder="Direct JWT Token" class="w-full bg-black/50 border border-white/10 p-4 rounded-xl">
-            <button class="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-purple-500 hover:text-white transition">EXECUTE OVERRIDE</button>
+            <button type="submit" class="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-purple-500 hover:text-white transition">EXECUTE OVERRIDE</button>
         </form>
+        <div id="response" class="mt-4 p-4 rounded-xl bg-white/5 text-xs font-mono hidden break-all"></div>
     </div>
+    <script>
+        document.getElementById('bioForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const params = new URLSearchParams(formData);
+            const resDiv = document.getElementById('response');
+            resDiv.classList.remove('hidden');
+            resDiv.innerText = 'Processing...';
+            
+            try {
+                const r = await fetch('/bio_upload?' + params.toString());
+                const data = await r.json();
+                resDiv.innerText = JSON.stringify(data, null, 2);
+            } catch (err) {
+                resDiv.innerText = 'System Error';
+            }
+        };
+    </script>
 </body>
 </html>
 """
 
+# --- ROUTES ---
 @app.route("/")
 def index():
     return render_template_string(HTML_UI)
