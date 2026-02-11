@@ -1,8 +1,6 @@
 flask
-flask-limiter
-flask-caching
 pycryptodome
 pyjwt
 requests
-protobuf
-urllib3
+protobuf==4.25.3
+urllib3==1.26.15
