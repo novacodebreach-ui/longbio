@@ -21,9 +21,16 @@ try:
     import my_pb2
     import output_pb2
 except ImportError as e:
-    print(f"Import Error: {e}")
+    logging.error(f"Protobuf Import Error: {e}")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# --- FIX: LOGGING (Console Only for Vercel) ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()] 
+)
 
 app = Flask(__name__)
 
@@ -35,7 +42,7 @@ FREEFIRE_VERSION = "OB52"
 KEY = bytes([89, 103, 38, 116, 99, 37, 68, 69, 117, 104, 54, 37, 90, 99, 94, 56])
 IV = bytes([54, 111, 121, 90, 68, 114, 50, 50, 69, 51, 121, 99, 104, 106, 77, 37])
 
-# --- DYNAMIC BIO PROTOBUF (data.proto) ---
+# --- DYNAMIC BIO PROTOBUF ---
 _sym_db = _symbol_database.Default()
 DESCRIPTOR_BIO = _descriptor_pool.Default().AddSerializedFile(
     b'\n\ndata.proto\"\xbb\x01\n\x04\x44\x61ta\x12\x0f\n\x07\x66ield_2\x18\x02 \x01(\x05\x12\x1e\n\x07\x66ield_5\x18\x05 \x01(\x0b\x32\r.EmptyMessage\x12\x1e\n\x07\x66ield_6\x18\x06 \x01(\x0b\x32\r.EmptyMessage\x12\x0f\n\x07\x66ield_8\x18\x08 \x01(\t\x12\x0f\n\x07\x66ield_9\x18\t \x01(\x05\x12\x1f\n\x08\x66ield_11\x18\x0b \x01(\x0b\x32\r.EmptyMessage\x12\x1f\n\x08\x66ield_12\x18\x0c \x01(\x0b\x32\r.EmptyMessage\"\x0e\n\x0c\x45mptyMessageb\x06proto3'
@@ -45,7 +52,6 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR_BIO, 'data1_pb2', globals())
 BioData = _sym_db.GetSymbol('Data')
 EmptyMessage = _sym_db.GetSymbol('EmptyMessage')
 
-# --- HELPER FUNCTIONS ---
 def encrypt_data(data_bytes):
     cipher = AES.new(KEY, AES.MODE_CBC, IV)
     return cipher.encrypt(pad(data_bytes, AES.block_size))
@@ -123,7 +129,6 @@ HTML_UI = """
 </html>
 """
 
-# --- ROUTES ---
 @app.route("/")
 def index():
     return render_template_string(HTML_UI)
@@ -144,7 +149,6 @@ def bio_upload():
     if not final_jwt:
         return jsonify({"status": "error", "message": "Authentication Failed"}), 401
 
-    # Bio Injection
     try:
         data = BioData()
         data.field_2 = 17
@@ -162,11 +166,10 @@ def bio_upload():
         u, n, r = decode_jwt_info(final_jwt)
         
         return jsonify({
-            "status": "Success" if resp.status_code == 200 else "Failed",
+            "status": "Success" if resp.status_code == 200 else f"Failed ({resp.status_code})",
             "name": n,
             "region": r,
-            "uid": u,
-            "response_hex": binascii.hexlify(resp.content).decode()[:50]
+            "uid": u
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
