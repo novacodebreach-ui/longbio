@@ -1,0 +1,8 @@
+flask
+flask-limiter
+flask-caching
+pycryptodome
+pyjwt
+requests
+protobuf
+urllib3
